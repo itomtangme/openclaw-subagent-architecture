@@ -30,6 +30,11 @@
       "templateDir": {
         "type": "string",
         "description": "Path to template directory (auto-resolved from skill or workspace/templates if omitted)"
+      },
+      "hrAgentId": {
+        "type": "string",
+        "default": "hr",
+        "description": "Agent ID for the HR (governance) agent. Defaults to 'hr'."
       }
     }
   }

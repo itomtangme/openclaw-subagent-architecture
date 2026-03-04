@@ -22,6 +22,8 @@ import {
   scanAndEnforce,
   enforceAgentWorkspace,
   resolveAgentMeta,
+  checkHrAgent,
+  offboardAgent,
   type ArchConfig,
 } from "./src/enforcer.js";
 
@@ -40,6 +42,7 @@ export default function architectureEnforcerPlugin(api: OpenClawPluginApi) {
     skipAgents: pluginCfg.skipAgents ?? [],
     forceOverwrite: pluginCfg.forceOverwrite ?? false,
     templateDir: pluginCfg.templateDir ?? "",
+    hrAgentId: pluginCfg.hrAgentId ?? "hr",
   };
 
   // Resolve template dir — look in skill location first, then workspace
@@ -62,6 +65,12 @@ export default function architectureEnforcerPlugin(api: OpenClawPluginApi) {
   api.on("gateway_start", async (_event, _ctx) => {
     log.info("[arch-enforcer] Gateway started — running full workspace audit…");
     try {
+      // Check if HR agent exists — warn if missing
+      const hrCheck = checkHrAgent(config, archConfig.hrAgentId);
+      if (!hrCheck.exists) {
+        log.warn(`[arch-enforcer] ${hrCheck.warning}`);
+      }
+
       const report = await scanAndEnforce(config, archConfig, log);
       if (report.patched > 0) {
         log.info(
@@ -135,12 +144,16 @@ export default function architectureEnforcerPlugin(api: OpenClawPluginApi) {
         }
 
         // Full audit
+        const hrCheck = checkHrAgent(config, archConfig.hrAgentId);
         const report = await scanAndEnforce(config, archConfig, log);
         const lines = [
           `🏛️ **Architecture Enforcement Report**`,
           `- Agents scanned: ${report.scanned}`,
           `- Agents patched: ${report.patched}`,
         ];
+        if (!hrCheck.exists) {
+          lines.push(`- ⚠️ **HR agent missing**: ${hrCheck.warning}`);
+        }
         if (report.patchedAgents.length > 0) {
           lines.push(`- Patched: ${report.patchedAgents.join(", ")}`);
         }
@@ -156,6 +169,71 @@ export default function architectureEnforcerPlugin(api: OpenClawPluginApi) {
         return { text: lines.join("\n") };
       } catch (err: any) {
         return { text: `❌ Enforcement failed: ${err?.message ?? err}` };
+      }
+    },
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Slash command: /offboard — remove an agent with full cleanup
+  // ──────────────────────────────────────────────────────────────────────────
+  api.registerCommand({
+    name: "offboard",
+    description:
+      "Remove an agent from the org with full cleanup (archive workspace, update config, clean references). Usage: /offboard <agent-id> [--force] [--skip-archive]",
+    acceptsArgs: true,
+    requireAuth: true,
+    handler: async (cmdCtx) => {
+      const rawArgs = cmdCtx.args?.trim() ?? "";
+      if (!rawArgs) {
+        return { text: "❌ Usage: `/offboard <agent-id>` [--force] [--skip-archive]" };
+      }
+
+      const parts = rawArgs.split(/\s+/);
+      const agentId = parts[0];
+      const force = parts.includes("--force");
+      const skipArchive = parts.includes("--skip-archive");
+
+      // Verify the calling agent is HR (or the command is from main/user)
+      const callerAgent = cmdCtx.agentId ?? "main";
+      if (callerAgent !== "main" && callerAgent !== archConfig.hrAgentId) {
+        return {
+          text: `⛔ Only **HR** (\`${archConfig.hrAgentId}\`) or **main** can offboard agents.\n` +
+            `Route this request to HR instead.`,
+        };
+      }
+
+      try {
+        const offResult = await offboardAgent(agentId, config, archConfig, log, {
+          force,
+          skipArchive,
+        });
+
+        const lines = [
+          `👔 **Agent Offboarding: ${agentId}**`,
+          `- Status: ${offResult.status === "removed" ? "✅ Removed" : offResult.status === "archived" ? "⚠️ Partially removed" : "❌ Failed"}`,
+        ];
+
+        if (offResult.steps.length > 0) {
+          lines.push(`\n**Steps completed:**`);
+          for (const step of offResult.steps) {
+            lines.push(`  ✓ ${step}`);
+          }
+        }
+
+        if (offResult.errors.length > 0) {
+          lines.push(`\n**Errors:**`);
+          for (const err of offResult.errors) {
+            lines.push(`  ⚠️ ${err}`);
+          }
+        }
+
+        if (offResult.status === "removed") {
+          lines.push(`\n🔄 Restart the gateway to apply changes: \`openclaw gateway restart\``);
+        }
+
+        return { text: lines.join("\n") };
+      } catch (err: any) {
+        return { text: `❌ Offboarding failed: ${err?.message ?? err}` };
       }
     },
   });
@@ -204,6 +282,41 @@ export default function architectureEnforcerPlugin(api: OpenClawPluginApi) {
         }
         for (const e of report.errors) {
           cliLog.warn(`Error: ${e}`);
+        }
+      });
+
+    // ── CLI: offboard-agent ──
+    const offCmd = cliCtx.program
+      .command("offboard-agent")
+      .description("Remove an agent from the org with full cleanup (archive workspace, update config, clean references)");
+
+    offCmd
+      .argument("<agent-id>", "Agent ID to offboard")
+      .option("--dry-run", "Show what would be changed without writing")
+      .option("--force", "Force removal even if agent has children (cascading delete)")
+      .option("--skip-archive", "Delete instead of archiving workspace")
+      .action(async (agentIdArg: string, opts: { dryRun?: boolean; force?: boolean; skipArchive?: boolean }) => {
+        const runConfig: ArchConfig = {
+          ...archConfig,
+          dryRun: opts.dryRun ?? archConfig.dryRun,
+        };
+        const cliLog = cliCtx.logger;
+
+        cliLog.info(`Offboarding agent: ${agentIdArg}…`);
+        const offResult = await offboardAgent(agentIdArg, config, runConfig, cliLog, {
+          force: opts.force,
+          skipArchive: opts.skipArchive,
+        });
+
+        cliLog.info(`Status: ${offResult.status}`);
+        for (const step of offResult.steps) {
+          cliLog.info(`  ✓ ${step}`);
+        }
+        for (const err of offResult.errors) {
+          cliLog.warn(`  ⚠️ ${err}`);
+        }
+        if (offResult.status === "removed") {
+          cliLog.info(`\nRestart gateway to apply: openclaw gateway restart`);
         }
       });
   });

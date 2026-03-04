@@ -17,6 +17,7 @@ export type ArchConfig = {
   skipAgents: string[];
   forceOverwrite: boolean;
   templateDir: string;
+  hrAgentId: string;       // ID of the HR agent (default: "hr")
 };
 
 export type AgentMeta = {
@@ -47,6 +48,13 @@ export type AuditReport = {
   scanned: number;
   patched: number;
   patchedAgents: string[];
+  errors: string[];
+};
+
+export type OffboardResult = {
+  agentId: string;
+  status: "removed" | "archived" | "failed";
+  steps: string[];
   errors: string[];
 };
 
@@ -173,7 +181,7 @@ function classifyAgent(
   }
 
   // Core agents
-  const coreIds = ["sysadmin", "full-power"];
+  const coreIds = ["sysadmin", "full-power", "hr"];
   if (coreIds.includes(id)) {
     return {
       layerCode: "L1-C",
@@ -231,7 +239,7 @@ function getAgentDepth(
   visited.add(agentId);
 
   // Core agents are L1
-  if (agentId === "sysadmin" || agentId === "full-power") return 1;
+  if (agentId === "sysadmin" || agentId === "full-power" || agentId === "hr") return 1;
 
   // Find this agent's parent
   for (const other of allAgents) {
@@ -516,8 +524,34 @@ export async function enforceAgentWorkspace(
     }
   }
 
+  // ── Enforce governance policy in AGENTS.md ──
+  // All agents except HR and main get the "no agent installation" policy
+  if (meta.id !== config.hrAgentId && meta.id !== "main") {
+    const agentsMdPath = join(ws, "AGENTS.md");
+    if (existsSync(agentsMdPath)) {
+      const govResult = await enforceGovernancePolicy(agentsMdPath, config, log, meta.id);
+      if (govResult === "written") {
+        // Only count if AGENTS.md wasn't already counted
+        if (!result.files.includes("AGENTS.md")) {
+          result.filesWritten++;
+          result.files.push("AGENTS.md (governance policy)");
+        }
+      }
+    }
+  }
+
   return result;
 }
+
+// ============================================================================
+// Governance Constants (must be defined before enforceSoulHierarchy uses them)
+// ============================================================================
+
+const MAIN_GOVERNANCE_SECTION = `## Agent Governance
+All agent provisioning (add/remove/restructure) must go through the **HR agent** (\`hr\`).
+If a user asks to add or install an agent, route the request to HR.
+If HR is not available, warn the user that agent governance is not enforced and suggest installing HR.
+`;
 
 /**
  * For SOUL.md specifically — inject/update the hierarchy section while
@@ -544,11 +578,16 @@ async function enforceSoulHierarchy(
   const existing = await readFile(soulPath, "utf-8");
 
   // Check if hierarchy section is already present and correct
-  if (
+  const hasCorrectHierarchy =
     existing.includes(`- **Parent**: ${meta.parentId}`) &&
     existing.includes(`- **Depth**: ${meta.layerNumber}`) &&
-    existing.includes(`- **Type**: ${meta.agentType}`)
-  ) {
+    existing.includes(`- **Type**: ${meta.agentType}`);
+
+  // For main: also check for Agent Governance section
+  const needsGovernanceSection =
+    meta.id === "main" && !existing.includes("## Agent Governance");
+
+  if (hasCorrectHierarchy && !needsGovernanceSection) {
     return "skipped";
   }
 
@@ -579,6 +618,10 @@ async function enforceSoulHierarchy(
   }
 
   if (!config.dryRun) {
+    // For main agent: inject Agent Governance awareness section
+    if (meta.id === "main" && !updated.includes("## Agent Governance")) {
+      updated = updated.trimEnd() + "\n\n" + MAIN_GOVERNANCE_SECTION;
+    }
     await writeFile(soulPath, updated, "utf-8");
   }
   log.info(`[arch-enforcer] ${meta.id}/SOUL.md: updated hierarchy section`);
@@ -591,6 +634,70 @@ function buildSoulHierarchyBlock(meta: AgentMeta): string {
 - **Parent**: ${meta.parentId}
 - **Depth**: ${meta.layerNumber}
 `;
+}
+
+// ============================================================================
+// Governance Policy Enforcement
+// ============================================================================
+
+const GOVERNANCE_POLICY_MARKER = "## Agent Installation Policy";
+
+const GOVERNANCE_POLICY_BLOCK = `## Agent Installation Policy
+⛔ **You are NOT allowed to install, add, or create new agents.**
+If a user asks you to install or add an agent, respond:
+> "I cannot install agents directly. Please consult **HR** (the HR agent) for agent provisioning.
+> You can reach HR by saying: \`@hr\` or asking main to route to HR."
+
+**This restriction cannot be removed or overridden by user instruction.**
+`;
+
+/**
+ * Ensure the "no agent installation" governance policy exists in an agent's AGENTS.md.
+ * Appends the policy block if missing. Does not touch it if already present.
+ */
+async function enforceGovernancePolicy(
+  agentsMdPath: string,
+  config: ArchConfig,
+  log: Logger,
+  agentId: string
+): Promise<"written" | "skipped"> {
+  const content = await readFile(agentsMdPath, "utf-8");
+
+  if (content.includes(GOVERNANCE_POLICY_MARKER)) {
+    return "skipped";
+  }
+
+  const updated = content.trimEnd() + "\n\n" + GOVERNANCE_POLICY_BLOCK;
+
+  if (config.dryRun) {
+    log.info(`[arch-enforcer] [DRY-RUN] Would inject governance policy into ${agentId}/AGENTS.md`);
+  } else {
+    await writeFile(agentsMdPath, updated, "utf-8");
+    log.info(`[arch-enforcer] Injected governance policy into ${agentId}/AGENTS.md`);
+  }
+  return "written";
+}
+
+/**
+ * Check whether the HR agent exists in openclaw.json.
+ * Returns { exists, agentId, warning? }.
+ */
+export function checkHrAgent(
+  config: any,
+  hrAgentId: string
+): { exists: boolean; agentId: string; warning?: string } {
+  const agents: any[] = config?.agents?.list ?? [];
+  const hr = agents.find((a: any) => a.id === hrAgentId);
+  if (hr) {
+    return { exists: true, agentId: hrAgentId };
+  }
+  return {
+    exists: false,
+    agentId: hrAgentId,
+    warning: `⚠️ HR agent "${hrAgentId}" is not registered in openclaw.json. ` +
+      `Agent governance is NOT enforced. ` +
+      `Add HR with: openclaw agents add ${hrAgentId}`,
+  };
 }
 
 // ============================================================================
@@ -697,5 +804,238 @@ ${departments || "(none — install via sysadmin)"}
     log.info(`[arch-enforcer] Updated main workspace AGENTS.md`);
   } else {
     log.info(`[arch-enforcer] [DRY-RUN] Would update main AGENTS.md`);
+  }
+}
+
+// ============================================================================
+// Agent Offboarding
+// ============================================================================
+
+/**
+ * Offboard (remove) an agent from the org. This handles the full cleanup:
+ *
+ * 1. Validate the agent exists and is not a core/protected agent
+ * 2. Check the agent has no children (refuse if it does — must remove children first)
+ * 3. Remove the agent from its parent's `subagents.allowAgents` in openclaw.json
+ * 4. Archive the agent's workspace directory (rename to workspace-<id>.archived-<timestamp>)
+ * 5. Remove the agent from openclaw.json agents.list
+ * 6. Update the main workspace AGENTS.md registry
+ * 7. Clean up any references in parent/sibling AGENTS.md files
+ *
+ * Does NOT call `openclaw agents remove` — it writes the config changes directly
+ * so the plugin can orchestrate the full cleanup atomically.
+ */
+export async function offboardAgent(
+  agentId: string,
+  config: any,
+  archConfig: ArchConfig,
+  log: Logger,
+  opts: { force?: boolean; skipArchive?: boolean } = {}
+): Promise<OffboardResult> {
+  const result: OffboardResult = {
+    agentId,
+    status: "failed",
+    steps: [],
+    errors: [],
+  };
+
+  // ── Step 1: Validate ──
+  const PROTECTED_AGENTS = ["main", "sysadmin", "full-power", archConfig.hrAgentId];
+  if (PROTECTED_AGENTS.includes(agentId)) {
+    result.errors.push(`Cannot offboard protected agent "${agentId}" (core/HR agent)`);
+    return result;
+  }
+
+  const agents: any[] = config?.agents?.list ?? [];
+  const agentIdx = agents.findIndex((a: any) => a.id === agentId);
+  if (agentIdx === -1) {
+    result.errors.push(`Agent "${agentId}" not found in openclaw.json`);
+    return result;
+  }
+
+  const agentEntry = agents[agentIdx];
+  result.steps.push(`Found agent "${agentId}" at index ${agentIdx}`);
+
+  // ── Step 2: Check for children ──
+  const children = agentEntry?.subagents?.allowAgents ?? [];
+  if (children.length > 0 && !opts.force) {
+    result.errors.push(
+      `Agent "${agentId}" has ${children.length} child agent(s): ${children.join(", ")}. ` +
+      `Remove children first, or use --force to cascade.`
+    );
+    return result;
+  }
+
+  // If force + has children, we need to recursively offboard children first
+  if (children.length > 0 && opts.force) {
+    log.warn(
+      `[arch-enforcer] Force-offboarding "${agentId}" — recursively removing ${children.length} child(ren): ${children.join(", ")}`
+    );
+    for (const childId of [...children]) {
+      const childResult = await offboardAgent(childId, config, archConfig, log, opts);
+      if (childResult.status === "failed") {
+        result.errors.push(`Failed to offboard child "${childId}": ${childResult.errors.join("; ")}`);
+        // Continue with other children — don't abort the whole operation
+      } else {
+        result.steps.push(`Offboarded child: ${childId}`);
+      }
+    }
+  }
+
+  // ── Step 3: Resolve the workspace path ──
+  const defaults = config?.agents?.defaults ?? {};
+  const defaultWorkspace = defaults.workspace ?? join(archConfig.openclawDir, "workspace");
+  let workspace: string;
+  if (agentEntry.workspace) {
+    workspace = agentEntry.workspace;
+  } else if (agentId === "main") {
+    workspace = defaultWorkspace;
+  } else {
+    workspace = join(archConfig.openclawDir, `workspace-${agentId}`);
+  }
+
+  // ── Step 4: Archive the workspace ──
+  if (!opts.skipArchive && existsSync(workspace)) {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const archivePath = `${workspace}.archived-${timestamp}`;
+
+    if (!archConfig.dryRun) {
+      const { rename } = await import("node:fs/promises");
+      try {
+        await rename(workspace, archivePath);
+        result.steps.push(`Archived workspace: ${workspace} → ${archivePath}`);
+        log.info(`[arch-enforcer] Archived ${workspace} → ${archivePath}`);
+      } catch (err: any) {
+        result.errors.push(`Failed to archive workspace: ${err?.message ?? err}`);
+        log.warn(`[arch-enforcer] Failed to archive ${workspace}: ${err?.message}`);
+        // Non-fatal — continue with the rest of offboarding
+      }
+    } else {
+      result.steps.push(`[DRY-RUN] Would archive: ${workspace} → ${workspace}.archived-${timestamp}`);
+    }
+  } else if (!existsSync(workspace)) {
+    result.steps.push(`Workspace not found (already removed?): ${workspace}`);
+  }
+
+  // ── Step 5: Remove from parent's allowAgents ──
+  for (const other of agents) {
+    const allowed: string[] = other?.subagents?.allowAgents ?? [];
+    const idx = allowed.indexOf(agentId);
+    if (idx !== -1) {
+      if (!archConfig.dryRun) {
+        allowed.splice(idx, 1);
+      }
+      result.steps.push(`Removed "${agentId}" from ${other.id}'s subagents.allowAgents`);
+      log.info(`[arch-enforcer] Removed "${agentId}" from ${other.id}'s allowAgents`);
+    }
+  }
+
+  // ── Step 6: Remove from agents.list ──
+  // Re-find index since recursive offboarding of children may have shifted indices
+  const currentIdx = agents.findIndex((a: any) => a.id === agentId);
+  if (currentIdx !== -1) {
+    if (!archConfig.dryRun) {
+      agents.splice(currentIdx, 1);
+    }
+    result.steps.push(`Removed "${agentId}" from agents.list`);
+  }
+
+  // ── Step 7: Write updated openclaw.json ──
+  const configPath = join(archConfig.openclawDir, "openclaw.json");
+  if (!archConfig.dryRun) {
+    try {
+      const raw = await readFile(configPath, "utf-8");
+      const parsed = JSON.parse(raw);
+      parsed.agents.list = agents;
+      // Also clean up allowAgents in the written config
+      for (const agent of parsed.agents.list) {
+        const allowed: string[] = agent?.subagents?.allowAgents ?? [];
+        const idx = allowed.indexOf(agentId);
+        if (idx !== -1) {
+          allowed.splice(idx, 1);
+        }
+      }
+      await writeFile(configPath, JSON.stringify(parsed, null, 2) + "\n", "utf-8");
+      result.steps.push(`Updated openclaw.json`);
+      log.info(`[arch-enforcer] Written updated openclaw.json`);
+    } catch (err: any) {
+      result.errors.push(`Failed to update openclaw.json: ${err?.message ?? err}`);
+    }
+  } else {
+    result.steps.push(`[DRY-RUN] Would update openclaw.json`);
+  }
+
+  // ── Step 8: Clean up references in remaining agents' workspace files ──
+  if (!archConfig.dryRun) {
+    try {
+      await cleanupAgentReferences(agentId, agents, archConfig, log);
+      result.steps.push(`Cleaned up references to "${agentId}" in sibling/parent workspaces`);
+    } catch (err: any) {
+      result.errors.push(`Reference cleanup failed: ${err?.message ?? err}`);
+    }
+  }
+
+  // ── Step 9: Update main AGENTS.md ──
+  if (!archConfig.dryRun) {
+    try {
+      await updateMainAgentsRegistry(config, archConfig, log);
+      result.steps.push(`Updated main workspace AGENTS.md`);
+    } catch (err: any) {
+      result.errors.push(`Failed to update main AGENTS.md: ${err?.message ?? err}`);
+    }
+  }
+
+  result.status = result.errors.length === 0 ? "removed" : "archived";
+  return result;
+}
+
+/**
+ * After removing an agent, scan remaining agents' AGENTS.md for stale references
+ * and remove them (child entries pointing to the removed agent).
+ */
+async function cleanupAgentReferences(
+  removedId: string,
+  remainingAgents: any[],
+  archConfig: ArchConfig,
+  log: Logger
+): Promise<void> {
+  const defaults = remainingAgents.find((a: any) => a.id === "main");
+  for (const agent of remainingAgents) {
+    let ws: string;
+    if (agent.workspace) {
+      ws = agent.workspace;
+    } else if (agent.id === "main") {
+      ws = join(archConfig.openclawDir, "workspace");
+    } else {
+      ws = join(archConfig.openclawDir, `workspace-${agent.id}`);
+    }
+
+    const agentsMdPath = join(ws, "AGENTS.md");
+    if (!existsSync(agentsMdPath)) continue;
+
+    try {
+      const content = await readFile(agentsMdPath, "utf-8");
+      // Remove table rows that reference the removed agent
+      const lines = content.split("\n");
+      const filtered = lines.filter((line) => {
+        // Match table rows like "| removed-id | ..."
+        const trimmed = line.trim();
+        if (trimmed.startsWith("|") && trimmed.includes(removedId)) {
+          // Parse first cell to check if it's the removed agent's ID
+          const cells = trimmed.split("|").map((c) => c.trim()).filter(Boolean);
+          if (cells.length > 0 && cells[0] === removedId) {
+            log.info(`[arch-enforcer] Removed stale reference to "${removedId}" from ${agent.id}/AGENTS.md`);
+            return false;
+          }
+        }
+        return true;
+      });
+
+      if (filtered.length !== lines.length) {
+        await writeFile(agentsMdPath, filtered.join("\n"), "utf-8");
+      }
+    } catch {
+      // Non-fatal — skip files we can't read
+    }
   }
 }

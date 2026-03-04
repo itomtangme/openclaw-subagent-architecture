@@ -29,6 +29,8 @@ This package combines:
 - 🏗️ **6-Layer Hierarchy** — L0 Orchestrator → L1 Director → L2 Manager → L3 Specialist → L4 Operator → L5 Worker
 - 🔄 **Auto-Enforcement** — patches SOUL.md, AGENTS.md, AGENT-MANIFEST.md on gateway start and agent spawn
 - 🧠 **Smart SOUL.md Patching** — injects hierarchy section without destroying custom persona content
+- 👔 **HR Agent** — dedicated governance agent for onboarding/offboarding, with "No Agent Installation" policy enforcement
+- 🗑️ **Agent Offboarding** — `/offboard` command for full cleanup (archive workspace, update config, clean references)
 - 🛡️ **Idempotent** — only writes when files are missing or incorrect
 - 📊 **4-Tier Model System** — cost-efficient model allocation per layer
 - 🔌 **Plug-and-Play Departments** — add/remove domain directors anytime
@@ -107,6 +109,7 @@ The plugin reads `openclaw.json` and derives hierarchy:
 L0  Orchestrator (main) — CEO, routes & synthesizes
 ├── L1-C  Core: sysadmin — CTO, manages OpenClaw itself
 ├── L1-C  Core: full-power — Emergency override
+├── L1-C  Core: hr — Agent governance (onboarding/offboarding)
 ├── L1-D  Department Director (pluggable)
 │   ├── L2  Manager
 │   │   ├── L3  Specialist
@@ -148,6 +151,7 @@ L0  Orchestrator (main) — CEO, routes & synthesizes
 | `forceOverwrite` | boolean | `false` | Overwrite even if v2.2 markers present |
 | `skipAgents` | string[] | `[]` | Agent IDs to exclude from enforcement |
 | `templateDir` | string | auto | Custom template directory path |
+| `hrAgentId` | string | `"hr"` | Agent ID for the HR (governance) agent |
 
 ## Commands
 
@@ -155,14 +159,23 @@ L0  Orchestrator (main) — CEO, routes & synthesizes
 ```
 /enforce              — Full audit of all agents
 /enforce planner      — Enforce specific agent
+/offboard travel      — Remove agent with full cleanup
+/offboard travel --force  — Cascade-remove agent + children
 ```
 
 ### CLI
 ```bash
+# Enforce architecture
 openclaw plugins cli architecture-enforcer enforce-architecture
 openclaw plugins cli architecture-enforcer enforce-architecture --dry-run
 openclaw plugins cli architecture-enforcer enforce-architecture --agent planner
 openclaw plugins cli architecture-enforcer enforce-architecture --force
+
+# Offboard (remove) agent
+openclaw plugins cli architecture-enforcer offboard-agent <agent-id>
+openclaw plugins cli architecture-enforcer offboard-agent <agent-id> --force
+openclaw plugins cli architecture-enforcer offboard-agent <agent-id> --dry-run
+openclaw plugins cli architecture-enforcer offboard-agent <agent-id> --skip-archive
 ```
 
 ## File Structure
@@ -171,10 +184,17 @@ openclaw plugins cli architecture-enforcer enforce-architecture --force
 openclaw-org/
 ├── package.json                    # Plugin entry + metadata
 ├── openclaw.plugin.json            # OpenClaw plugin manifest
+├── agent/
+│   └── hr/                         # HR agent workspace files
+│       ├── SOUL.md                 # HR persona + onboard/offboard workflows
+│       ├── AGENTS.md               # HR sub-agent registry
+│       ├── IDENTITY.md             # HR identity
+│       ├── TOOLS.md                # HR tool reference
+│       └── HR-DETECTION.md         # Guidance for main on routing to HR
 ├── plugin/
-│   ├── index.ts                    # Lifecycle hooks & commands
+│   ├── index.ts                    # Lifecycle hooks, /enforce, /offboard commands
 │   └── src/
-│       └── enforcer.ts             # Core enforcement engine
+│       └── enforcer.ts             # Core enforcement + offboarding engine
 ├── skill/
 │   ├── SKILL.md                    # Skill entry point
 │   ├── assets/templates/           # Workspace file templates
