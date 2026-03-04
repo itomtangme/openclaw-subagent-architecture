@@ -19,16 +19,16 @@
 - `/offboard <agent-id> --force` — cascade-remove children
 - `/offboard <agent-id> --skip-archive` — skip workspace archiving
 
-### CLI Equivalents
-```bash
-# Enforce all agents
-openclaw plugins cli architecture-enforcer enforce-architecture
+### Triggering Enforcement
+Enforcement runs automatically on gateway start/restart and sub-agent spawn.
+You can also trigger it on-demand via slash commands:
+- `/enforce` — audit all agents
+- `/enforce <agent-id>` — audit a specific agent
+- `/offboard <agent-id>` — remove an agent
+- `/offboard <agent-id> --force` — cascade-remove children
 
-# Offboard an agent
-openclaw plugins cli architecture-enforcer offboard-agent <agent-id>
-openclaw plugins cli architecture-enforcer offboard-agent <agent-id> --force
-openclaw plugins cli architecture-enforcer offboard-agent <agent-id> --dry-run
-```
+> **Note:** `openclaw plugins cli` is not currently supported in the OpenClaw runtime.
+> Use slash commands (`/enforce`, `/offboard`) or restart the gateway to trigger enforcement.
 
 ## Notes
 HR should always use `/enforce` after adding agents to ensure hierarchy files are correctly provisioned.

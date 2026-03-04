@@ -528,17 +528,14 @@ openclaw gateway restart
 
 ### Remove a Department (L1-D)
 
-Use the offboard command:
+Use the offboard slash command (in an agent chat session):
 
 ```bash
 # Via slash command
 /offboard <agent-id>
 
-# Via CLI
-openclaw plugins cli architecture-enforcer offboard-agent <agent-id>
-
 # With cascade (removes children too)
-openclaw plugins cli architecture-enforcer offboard-agent <agent-id> --force
+/offboard <agent-id> --force
 ```
 
 ### Manual Removal
@@ -589,9 +586,9 @@ openclaw gateway restart
 | Check gateway | `openclaw gateway status` |
 | Restart gateway | `openclaw gateway restart` |
 | Validate config | `python3 -m json.tool < ~/.openclaw/openclaw.json` |
-| Enforce architecture | `/enforce` or `openclaw plugins cli architecture-enforcer enforce-architecture` |
-| Offboard agent | `/offboard <id>` or `openclaw plugins cli architecture-enforcer offboard-agent <id>` |
-| Dry run | `openclaw plugins cli architecture-enforcer enforce-architecture --dry-run` |
+| Enforce architecture | `/enforce` (slash command in agent chat) |
+| Offboard agent | `/offboard <id>` or `/offboard <id> --force` |
+| Dry run enforcement | Restart gateway — enforcement is automatic; use `forceOverwrite: false` (default) for safe mode |
 | View org status | Read `~/.openclaw/workspace/STATUS.md` (auto-generated on each enforcement pass) |
 | Upgrade | `clawhub update openclaw-org` or `cd skill && git pull` |
 | Clear plugin cache | `rm -rf /tmp/jiti/` (before restart) |

@@ -486,12 +486,23 @@ export async function enforceAgentWorkspace(
     const exists = existsSync(filePath);
 
     if (exists && !config.forceOverwrite) {
-      // Check if the file has hierarchy markers
+      // Check if the file has hierarchy markers (file-specific detection)
       const content = await readFile(filePath, "utf-8");
-      const hasArchMarkers =
-        content.includes("## Architecture") &&
-        content.includes("Version: 2.2") &&
-        content.includes(`Parent: ${meta.parentId}`);
+      let hasArchMarkers: boolean;
+      if (target.filename === "AGENT-MANIFEST.md") {
+        // AGENT-MANIFEST.md uses ## Identity with ID/Parent fields
+        hasArchMarkers =
+          content.includes("## Identity") &&
+          content.includes(`**ID**: ${meta.id}`) &&
+          content.includes(`**Parent**: ${meta.parentId}`) &&
+          content.includes("## Escalation Policy");
+      } else {
+        // AGENTS.md uses ## Architecture with Version: 2.2
+        hasArchMarkers =
+          content.includes("## Architecture") &&
+          content.includes("Version: 2.2") &&
+          content.includes(`Parent: ${meta.parentId}`);
+      }
 
       if (hasArchMarkers) {
         result.skipped.push(target.filename);

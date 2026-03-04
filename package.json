@@ -1,6 +1,6 @@
 {
   "name": "openclaw-org",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Hierarchical multi-agent architecture framework with automated enforcement for OpenClaw. Combines a skill (docs/templates/SKILL.md) with a plugin (lifecycle hooks) that auto-provisions SOUL.md, AGENTS.md, AGENT-MANIFEST.md when new agents are added.",
   "type": "module",
   "main": "index.ts",

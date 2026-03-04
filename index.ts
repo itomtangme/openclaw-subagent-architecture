@@ -8,8 +8,8 @@
  * 1. On gateway_start — scans all agent workspaces and patches missing/outdated
  *    hierarchy files (SOUL.md, AGENTS.md, AGENT-MANIFEST.md).
  * 2. On subagent_spawned — patches the new child agent's workspace in real-time.
- * 3. Provides a CLI sub-command `openclaw plugins cli architecture-enforcer`
- *    for manual audit / enforce runs.
+ * 3. Registers CLI sub-commands via `api.registerCli()` for manual audit/enforce
+ *    runs (available when the OpenClaw runtime supports `plugins cli` routing).
  * 4. Provides a `/enforce` slash-command for on-demand enforcement.
  */
 
@@ -245,7 +245,9 @@ export default function architectureEnforcerPlugin(api: OpenClawPluginApi) {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
-  // CLI: openclaw plugins cli architecture-enforcer
+  // CLI: registered via api.registerCli() — available when OpenClaw runtime
+  // supports `plugins cli` routing (future). Currently enforcement is handled
+  // by gateway_start hook and /enforce slash command.
   // ──────────────────────────────────────────────────────────────────────────
   api.registerCli(async (cliCtx) => {
     const cmd = cliCtx.program

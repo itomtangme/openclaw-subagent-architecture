@@ -147,20 +147,23 @@ cp -r ~/.openclaw/skills/openclaw-org/agent/hr/* ~/.openclaw/workspace-hr/
 openclaw gateway restart
 ```
 
-## CLI
+## Triggering Enforcement
 
-```bash
-# Enforce architecture
-openclaw plugins cli architecture-enforcer enforce-architecture
-openclaw plugins cli architecture-enforcer enforce-architecture --dry-run
-openclaw plugins cli architecture-enforcer enforce-architecture --agent planner
-openclaw plugins cli architecture-enforcer enforce-architecture --force
+Enforcement runs **automatically** — no manual CLI needed:
 
-# Offboard (remove) agent
-openclaw plugins cli architecture-enforcer offboard-agent <agent-id>
-openclaw plugins cli architecture-enforcer offboard-agent <agent-id> --force
-openclaw plugins cli architecture-enforcer offboard-agent <agent-id> --dry-run
-```
+| Trigger | When |
+|---------|------|
+| **Gateway start/restart** | `openclaw gateway restart` — full audit of all agents |
+| **Sub-agent spawn** | Any time a sub-agent is spawned — real-time patching |
+| **`/enforce` slash command** | On-demand via agent chat (e.g. "run /enforce") |
+| **`/enforce <agent-id>`** | Enforce a specific agent |
+| **`/offboard <agent-id>`** | Remove an agent with full cleanup |
+| **`/offboard <agent-id> --force`** | Cascade-remove agent and all children |
+
+> **Note:** `openclaw plugins cli` is not currently a supported OpenClaw subcommand.
+> Enforcement is handled via lifecycle hooks (gateway start, sub-agent spawn) and
+> slash commands (`/enforce`, `/offboard`). A standalone CLI script may be added in
+> a future version.
 
 ## Architecture Overview (v2.2)
 
