@@ -111,7 +111,7 @@ The plugin reads `openclaw.json` and derives hierarchy from:
 1. **`agents.list[].id`** — agent identity
 2. **`agents.list[].subagents.allowAgents`** — parent→child relationships
 3. **`agents.list[].identity`** — name, theme, emoji
-4. **Core agent convention** — `main` = L0, `sysadmin`/`full-power` = L1-C
+4. **Core agent convention** — `main` = L0, `sysadmin`/`full-power`/`hr` = L1-C
 5. **Depth calculation** — walks the parent chain to determine layer number
 
 ## Slash Commands
@@ -120,14 +120,33 @@ The plugin reads `openclaw.json` and derives hierarchy from:
 |---------|-------------|
 | `/enforce` | Run full audit on all agent workspaces |
 | `/enforce <agent-id>` | Enforce a specific agent |
+| `/offboard <agent-id>` | Remove an agent with full cleanup (archive, config, refs) |
+| `/offboard <agent-id> --force` | Cascade-remove agent and all its children |
+
+## Agent Governance (HR)
+
+The **HR agent** (`hr`) is a Core (L1-C) agent responsible for all agent onboarding and offboarding.
+
+- **Only HR** (or main/user) may add or remove agents
+- All other agents have a "No Agent Installation" policy injected into their AGENTS.md
+- The enforcer plugin automatically checks for HR on startup and warns if missing
+- Main's SOUL.md is injected with an "Agent Governance" section routing agent requests to HR
+
+See `agent/hr/SOUL.md` for HR's full onboarding/offboarding workflows.
 
 ## CLI
 
 ```bash
+# Enforce architecture
 openclaw plugins cli architecture-enforcer enforce-architecture
 openclaw plugins cli architecture-enforcer enforce-architecture --dry-run
 openclaw plugins cli architecture-enforcer enforce-architecture --agent planner
 openclaw plugins cli architecture-enforcer enforce-architecture --force
+
+# Offboard (remove) agent
+openclaw plugins cli architecture-enforcer offboard-agent <agent-id>
+openclaw plugins cli architecture-enforcer offboard-agent <agent-id> --force
+openclaw plugins cli architecture-enforcer offboard-agent <agent-id> --dry-run
 ```
 
 ## Architecture Overview (v2.2)
@@ -138,7 +157,7 @@ See `skill/references/ARCHITECTURE.md` for the complete specification.
 
 ```
 L0  Orchestrator (main) — CEO, routes & synthesizes
-├── L1-C  Core: sysadmin, full-power
+├── L1-C  Core: sysadmin, full-power, hr
 ├── L1-D  Department Directors (pluggable)
 │   ├── L2  Managers
 │   │   ├── L3  Specialists
@@ -163,10 +182,17 @@ Rule: children inherit or downgrade tier. Never upgrade beyond parent.
 openclaw-org/
 ├── package.json                    # NPM package (plugin entry point)
 ├── openclaw.plugin.json            # Plugin manifest for OpenClaw
+├── agent/
+│   └── hr/                         # HR agent workspace files
+│       ├── SOUL.md                 # HR persona + onboard/offboard workflows
+│       ├── AGENTS.md               # HR sub-agent registry
+│       ├── IDENTITY.md             # HR identity
+│       ├── TOOLS.md                # HR tool reference
+│       └── HR-DETECTION.md         # Guidance for main on routing to HR
 ├── plugin/
-│   ├── index.ts                    # Plugin entry — hooks & commands
+│   ├── index.ts                    # Plugin entry — hooks, /enforce, /offboard
 │   └── src/
-│       └── enforcer.ts             # Core enforcement engine
+│       └── enforcer.ts             # Core enforcement + offboarding engine
 ├── skill/
 │   ├── SKILL.md                    # This file (skill entry point)
 │   ├── assets/

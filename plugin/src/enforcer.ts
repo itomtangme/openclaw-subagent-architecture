@@ -82,7 +82,6 @@ export async function resolveAllAgents(
 
   // First pass: build basic metadata
   const metas: AgentMeta[] = [];
-  const agentIds = new Set(agents.map((a: any) => a.id));
 
   for (const agent of agents) {
     const id = agent.id;
@@ -115,7 +114,7 @@ export async function resolveAllAgents(
 
     // Determine layer/type from conventions + config
     const { layerCode, layerNumber, layerType, agentType, tierNumber } =
-      classifyAgent(id, agent, parentId, agents);
+      classifyAgent(id, agent, parentId, agents, archConfig.hrAgentId);
 
     const identity = agent.identity ?? {};
     const children = findChildren(id, agents);
@@ -161,7 +160,8 @@ function classifyAgent(
   id: string,
   agent: any,
   parentId: string,
-  allAgents: any[]
+  allAgents: any[],
+  hrAgentId: string = "hr"
 ): {
   layerCode: string;
   layerNumber: number;
@@ -181,7 +181,7 @@ function classifyAgent(
   }
 
   // Core agents
-  const coreIds = ["sysadmin", "full-power", "hr"];
+  const coreIds = ["sysadmin", "full-power", hrAgentId];
   if (coreIds.includes(id)) {
     return {
       layerCode: "L1-C",
@@ -205,7 +205,7 @@ function classifyAgent(
 
   // Walk up the chain to determine this agent's depth.
   // We need to find the parent's depth first, then add 1.
-  const parentDepth = getAgentDepth(parentId, allAgents);
+  const parentDepth = getAgentDepth(parentId, allAgents, new Set(), hrAgentId);
   const layerNumber = Math.min(parentDepth + 1, 5);
 
   const layerMap: Record<number, { code: string; type: string; tier: number }> = {
@@ -232,20 +232,21 @@ function classifyAgent(
 function getAgentDepth(
   agentId: string,
   allAgents: any[],
-  visited: Set<string> = new Set()
+  visited: Set<string> = new Set(),
+  hrAgentId: string = "hr"
 ): number {
   if (agentId === "main" || agentId === "—") return 0;
   if (visited.has(agentId)) return 1; // break circular → assume L1
   visited.add(agentId);
 
   // Core agents are L1
-  if (agentId === "sysadmin" || agentId === "full-power" || agentId === "hr") return 1;
+  if (agentId === "sysadmin" || agentId === "full-power" || agentId === hrAgentId) return 1;
 
   // Find this agent's parent
   for (const other of allAgents) {
     const allowed = other?.subagents?.allowAgents ?? [];
     if (allowed.includes(agentId) && other.id !== agentId) {
-      return getAgentDepth(other.id, allAgents, visited) + 1;
+      return getAgentDepth(other.id, allAgents, visited, hrAgentId) + 1;
     }
   }
   // Orphan — assume direct child of main
@@ -623,6 +624,8 @@ async function enforceSoulHierarchy(
       updated = updated.trimEnd() + "\n\n" + MAIN_GOVERNANCE_SECTION;
     }
     await writeFile(soulPath, updated, "utf-8");
+  } else {
+    log.info(`[arch-enforcer] [DRY-RUN] Would update ${meta.id}/SOUL.md`);
   }
   log.info(`[arch-enforcer] ${meta.id}/SOUL.md: updated hierarchy section`);
   return "written";
@@ -783,7 +786,7 @@ export async function updateMainAgentsRegistry(
 ## Architecture
 - Version: 2.2
 - Max Depth: 6 layers (L0-L5)
-- Core Agents: 3 (immutable)
+- Core Agents: 4 (immutable: main, sysadmin, full-power, hr)
 - Total Agents: ${allMeta.length}
 - Last Enforced: ${new Date().toISOString()}
 
@@ -946,15 +949,8 @@ export async function offboardAgent(
     try {
       const raw = await readFile(configPath, "utf-8");
       const parsed = JSON.parse(raw);
+      // Use our in-memory agents array (already cleaned by steps 5-6) as source of truth
       parsed.agents.list = agents;
-      // Also clean up allowAgents in the written config
-      for (const agent of parsed.agents.list) {
-        const allowed: string[] = agent?.subagents?.allowAgents ?? [];
-        const idx = allowed.indexOf(agentId);
-        if (idx !== -1) {
-          allowed.splice(idx, 1);
-        }
-      }
       await writeFile(configPath, JSON.stringify(parsed, null, 2) + "\n", "utf-8");
       result.steps.push(`Updated openclaw.json`);
       log.info(`[arch-enforcer] Written updated openclaw.json`);
@@ -999,7 +995,6 @@ async function cleanupAgentReferences(
   archConfig: ArchConfig,
   log: Logger
 ): Promise<void> {
-  const defaults = remainingAgents.find((a: any) => a.id === "main");
   for (const agent of remainingAgents) {
     let ws: string;
     if (agent.workspace) {
