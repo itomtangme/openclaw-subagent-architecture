@@ -22,7 +22,6 @@ import {
   scanAndEnforce,
   enforceAgentWorkspace,
   resolveAgentMeta,
-  type AgentMeta,
   type ArchConfig,
 } from "./src/enforcer.js";
 

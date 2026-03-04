@@ -441,19 +441,25 @@ export async function enforceAgentWorkspace(
     return result;
   }
 
-  // Files to enforce
+  // Files to enforce (skip AGENTS.md for main — it gets the org-wide registry
+  // from updateMainAgentsRegistry instead of the per-agent sub-agent format)
   const targets: { filename: string; templateFile: string; builder: () => string }[] = [
-    {
-      filename: "AGENTS.md",
-      templateFile: "AGENTS-template.md",
-      builder: () => buildAgents(meta),
-    },
     {
       filename: "AGENT-MANIFEST.md",
       templateFile: "MANIFEST-template.md",
       builder: () => buildManifest(meta),
     },
   ];
+
+  // Only add per-agent AGENTS.md for non-main agents
+  // (main's AGENTS.md is the central org registry, written by updateMainAgentsRegistry)
+  if (meta.id !== "main") {
+    targets.unshift({
+      filename: "AGENTS.md",
+      templateFile: "AGENTS-template.md",
+      builder: () => buildAgents(meta),
+    });
+  }
 
   // SOUL.md — enforce hierarchy section, but preserve existing custom content
   const soulPath = join(ws, "SOUL.md");
