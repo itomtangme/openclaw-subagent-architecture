@@ -1,4 +1,4 @@
-# 🏛️ OpenClaw Architecture Enforcer
+# 🏛️ OpenClaw Subagent Architecture
 
 Hierarchical multi-agent architecture framework with **automated enforcement** for [OpenClaw](https://openclaw.com).
 
@@ -39,13 +39,13 @@ This package combines:
 
 ### 1. Clone
 ```bash
-git clone https://github.com/itomtangme/openclaw-architecture-enforcer.git \
-  ~/.openclaw/skills/openclaw-architecture-enforcer
+git clone https://github.com/itomtangme/openclaw-subagent-architecture.git \
+  ~/.openclaw/skills/openclaw-subagent-architecture
 ```
 
 ### 2. Symlink plugin
 ```bash
-ln -s ~/.openclaw/skills/openclaw-architecture-enforcer \
+ln -s ~/.openclaw/skills/openclaw-subagent-architecture \
   ~/.openclaw/workspace/plugins/architecture-enforcer
 ```
 
@@ -168,7 +168,7 @@ openclaw plugins cli architecture-enforcer enforce-architecture --force
 ## File Structure
 
 ```
-openclaw-architecture-enforcer/
+openclaw-subagent-architecture/
 ├── package.json                    # Plugin entry + metadata
 ├── openclaw.plugin.json            # OpenClaw plugin manifest
 ├── plugin/

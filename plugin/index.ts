@@ -14,17 +14,13 @@
  */
 
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
-import { readFile, writeFile, mkdir, readdir, stat } from "node:fs/promises";
-import { join, basename } from "node:path";
+import { join } from "node:path";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 
 import {
   scanAndEnforce,
   enforceAgentWorkspace,
-  buildSoul,
-  buildAgents,
-  buildManifest,
   resolveAgentMeta,
   type AgentMeta,
   type ArchConfig,
@@ -52,7 +48,7 @@ export default function architectureEnforcerPlugin(api: OpenClawPluginApi) {
     const skillPath = join(
       archConfig.openclawDir,
       "skills",
-      "openclaw-architecture-enforcer",
+      "openclaw-subagent-architecture",
       "skill",
       "assets",
       "templates"

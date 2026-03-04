@@ -3,10 +3,9 @@
  * detects missing/outdated hierarchy files, and writes them.
  */
 
-import { readFile, writeFile, mkdir, readdir, stat } from "node:fs/promises";
-import { join, dirname } from "node:path";
+import { readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { existsSync } from "node:fs";
-import { homedir } from "node:os";
 
 // ============================================================================
 // Types
@@ -81,8 +80,15 @@ export async function resolveAllAgents(
     const id = agent.id;
     if (!id) continue;
 
-    const workspace =
-      agent.workspace ?? join(archConfig.openclawDir, `workspace-${id}`);
+    // The main agent typically uses "workspace" not "workspace-main"
+    let workspace: string;
+    if (agent.workspace) {
+      workspace = agent.workspace;
+    } else if (id === "main") {
+      workspace = defaultWorkspace;
+    } else {
+      workspace = join(archConfig.openclawDir, `workspace-${id}`);
+    }
 
     // Determine parent by scanning allowAgents in other agents' subagents config
     let parentId = "main";
@@ -189,9 +195,10 @@ function classifyAgent(
     };
   }
 
-  // Walk up the chain to determine depth
-  const depth = getDepth(parentId, allAgents, 2); // start at 2 since parent is at least L1
-  const layerNumber = Math.min(depth, 5);
+  // Walk up the chain to determine this agent's depth.
+  // We need to find the parent's depth first, then add 1.
+  const parentDepth = getAgentDepth(parentId, allAgents);
+  const layerNumber = Math.min(parentDepth + 1, 5);
 
   const layerMap: Record<number, { code: string; type: string; tier: number }> = {
     2: { code: "L2", type: "Manager", tier: 2 },
@@ -210,16 +217,31 @@ function classifyAgent(
   };
 }
 
-function getDepth(agentId: string, allAgents: any[], currentDepth: number): number {
-  if (agentId === "main" || agentId === "—") return currentDepth;
+/**
+ * Get the depth (layer number) of an agent by walking up the parent chain.
+ * Uses visited set to prevent infinite loops from circular allowAgents.
+ */
+function getAgentDepth(
+  agentId: string,
+  allAgents: any[],
+  visited: Set<string> = new Set()
+): number {
+  if (agentId === "main" || agentId === "—") return 0;
+  if (visited.has(agentId)) return 1; // break circular → assume L1
+  visited.add(agentId);
+
+  // Core agents are L1
+  if (agentId === "sysadmin" || agentId === "full-power") return 1;
+
   // Find this agent's parent
   for (const other of allAgents) {
     const allowed = other?.subagents?.allowAgents ?? [];
-    if (allowed.includes(agentId)) {
-      return getDepth(other.id, allAgents, currentDepth + 1);
+    if (allowed.includes(agentId) && other.id !== agentId) {
+      return getAgentDepth(other.id, allAgents, visited) + 1;
     }
   }
-  return currentDepth;
+  // Orphan — assume direct child of main
+  return 1;
 }
 
 function findChildren(agentId: string, allAgents: any[]): string[] {
@@ -436,7 +458,7 @@ export async function enforceAgentWorkspace(
   // SOUL.md — enforce hierarchy section, but preserve existing custom content
   const soulPath = join(ws, "SOUL.md");
   const soulResult = await enforceSoulHierarchy(soulPath, meta, config, log);
-  if (soulResult === "written") {
+  if (soulResult === "written" || soulResult === "created") {
     result.filesWritten++;
     result.files.push("SOUL.md");
   } else if (soulResult === "skipped") {
@@ -479,11 +501,13 @@ export async function enforceAgentWorkspace(
 
     if (config.dryRun) {
       log.info(`[arch-enforcer] [DRY-RUN] Would write: ${filePath}`);
+      result.filesWritten++;
+      result.files.push(target.filename + " (dry-run)");
     } else {
       await writeFile(filePath, content, "utf-8");
+      result.filesWritten++;
+      result.files.push(target.filename);
     }
-    result.filesWritten++;
-    result.files.push(target.filename);
   }
 
   return result;
@@ -522,30 +546,20 @@ async function enforceSoulHierarchy(
     return "skipped";
   }
 
-  // Hierarchy section is missing or wrong — inject/replace it
   const LAYER_START = "## Layer";
-  const LAYER_END_MARKERS = [
-    "## Core Responsibilities",
-    "## Identity",
-    "## When You Are Invoked",
-    "## Delegation Protocol",
-    "## Rules",
-    "## Persona",
-    "## ",
-  ];
 
   let updated: string;
   const layerIdx = existing.indexOf(LAYER_START);
 
   if (layerIdx !== -1) {
-    // Find end of existing Layer section
-    let endIdx = existing.length;
-    for (const marker of LAYER_END_MARKERS) {
-      if (marker === LAYER_START) continue;
-      const mIdx = existing.indexOf(marker, layerIdx + LAYER_START.length + 1);
-      if (mIdx !== -1 && mIdx < endIdx) {
-        endIdx = mIdx;
-      }
+    // Find end of existing Layer section — look for the next H2 heading
+    const afterLayer = existing.slice(layerIdx + LAYER_START.length);
+    const nextH2Match = afterLayer.match(/\n(## [^\n])/);
+    let endIdx: number;
+    if (nextH2Match && nextH2Match.index != null) {
+      endIdx = layerIdx + LAYER_START.length + nextH2Match.index + 1; // +1 to skip the \n
+    } else {
+      endIdx = existing.length;
     }
     updated = existing.slice(0, layerIdx) + hierarchySection + "\n" + existing.slice(endIdx);
   } else {
@@ -605,6 +619,13 @@ export async function scanAndEnforce(
       } catch (err: any) {
         report.errors.push(`${meta.id}: ${err?.message ?? err}`);
       }
+    }
+
+    // Update the main workspace central AGENTS.md registry
+    try {
+      await updateMainAgentsRegistry(config, archConfig, log);
+    } catch (err: any) {
+      report.errors.push(`Main AGENTS.md update failed: ${err?.message ?? err}`);
     }
   } catch (err: any) {
     report.errors.push(`Failed to resolve agents: ${err?.message ?? err}`);

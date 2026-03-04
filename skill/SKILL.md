@@ -1,5 +1,5 @@
 ---
-name: openclaw-architecture-enforcer
+name: openclaw-subagent-architecture
 description: >
   Hierarchical multi-agent architecture framework for OpenClaw with **automated enforcement**.
   Combines a skill (docs, templates, architecture spec) with a plugin (lifecycle hooks) that
@@ -15,7 +15,7 @@ description: >
   compliance on existing agents. NOT for: single-agent setups that don't need hierarchy.
 ---
 
-# OpenClaw Architecture Enforcer — Skill + Plugin
+# OpenClaw Subagent Architecture — Skill + Plugin
 
 ## What This Is
 
@@ -38,10 +38,10 @@ This package bundles **two things**:
 
 ### 1. Install as skill (for agent knowledge)
 ```bash
-clawhub install openclaw-architecture-enforcer
+clawhub install openclaw-subagent-architecture
 # or clone:
-git clone https://github.com/itomtangme/openclaw-architecture-enforcer.git \
-  ~/.openclaw/skills/openclaw-architecture-enforcer
+git clone https://github.com/itomtangme/openclaw-subagent-architecture.git \
+  ~/.openclaw/skills/openclaw-subagent-architecture
 ```
 
 ### 2. Install as plugin (for enforcement)
@@ -49,11 +49,11 @@ git clone https://github.com/itomtangme/openclaw-architecture-enforcer.git \
 Create a symlink or copy the plugin into your plugins directory:
 ```bash
 # Option A: Symlink (recommended — stays updated)
-ln -s ~/.openclaw/skills/openclaw-architecture-enforcer \
+ln -s ~/.openclaw/skills/openclaw-subagent-architecture \
   ~/.openclaw/workspace/plugins/architecture-enforcer
 
 # Option B: Copy
-cp -r ~/.openclaw/skills/openclaw-architecture-enforcer \
+cp -r ~/.openclaw/skills/openclaw-subagent-architecture \
   ~/.openclaw/workspace/plugins/architecture-enforcer
 ```
 
@@ -160,7 +160,7 @@ Rule: children inherit or downgrade tier. Never upgrade beyond parent.
 ## File Structure
 
 ```
-openclaw-architecture-enforcer/
+openclaw-subagent-architecture/
 ├── package.json                    # NPM package (plugin entry point)
 ├── openclaw.plugin.json            # Plugin manifest for OpenClaw
 ├── plugin/
