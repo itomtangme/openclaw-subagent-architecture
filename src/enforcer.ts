@@ -401,7 +401,7 @@ export function buildManifest(meta: AgentMeta): string {
 
 ## Accepts (Input Contract)
 - Natural language task descriptions related to ${meta.domain}
-- Structured delegation protocol messages
+- Structured parameters: Task context, constraints, output format
 
 ## Produces (Output Contract)
 - Structured results via delegation protocol

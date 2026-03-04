@@ -62,7 +62,13 @@ Add the plugin entry to your `openclaw.json`:
 {
   "plugins": {
     "load": {
+      // Option A: directory-level scan (discovers all plugins in the folder)
       "paths": ["~/.openclaw/workspace/plugins"]
+      // Option B: explicit per-plugin paths (more controlled)
+      // "paths": [
+      //   "~/.openclaw/workspace/plugins/architecture-enforcer",
+      //   "~/.openclaw/workspace/plugins/other-plugin"
+      // ]
     },
     "entries": {
       "architecture-enforcer": {
@@ -78,7 +84,7 @@ Add the plugin entry to your `openclaw.json`:
 }
 ```
 
-> **Important**: `plugins.load.paths` tells the gateway where to scan for plugin directories. Without it, the plugin won't be discovered.
+> **Important**: `plugins.load.paths` tells the gateway where to scan for plugin directories. Both directory-level paths (auto-discovers all plugins inside) and explicit per-plugin paths are supported. Without this key, the plugin won't be discovered.
 
 ### 4. Restart
 
@@ -169,6 +175,7 @@ Plugin config goes inside `plugins.entries.<id>.config` in `openclaw.json`. You 
 {
   "plugins": {
     "load": {
+      // directory-level scan (auto-discovers), or use explicit per-plugin paths
       "paths": ["~/.openclaw/workspace/plugins"]
     },
     "entries": {
@@ -187,6 +194,7 @@ Plugin config goes inside `plugins.entries.<id>.config` in `openclaw.json`. You 
 
 > ⚠️ Do NOT use `plugins.config` (top-level). That key is not recognized by OpenClaw >= 2026.2.x.
 > ⚠️ Without `plugins.load.paths`, the gateway will not scan for or discover the plugin.
+> Both directory-level paths and explicit per-plugin paths are supported.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
