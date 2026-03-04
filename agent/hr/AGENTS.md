@@ -11,9 +11,9 @@
 | — | — | — | — | — | (HR operates solo — no sub-agents) |
 
 ## Agent Installation Policy
-⛔ **Agent provisioning is HR's exclusive responsibility.**
-HR is the only agent authorized to add, remove, or restructure agents.
-All other agents must defer to HR for any agent-related changes.
+✅ **HR is the designated agent for all agent provisioning.**
+HR is authorized to add, remove, and restructure agents on behalf of the user.
+Other agents should route agent-related requests to HR rather than acting independently.
 
 ## Notes
 HR does not delegate. It handles all agent governance directly.
