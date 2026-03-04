@@ -59,6 +59,10 @@ openclaw gateway restart
 
 That's it. The plugin will audit all agent workspaces on startup and patch any missing hierarchy files.
 
+## Deployment Guide
+
+For a comprehensive step-by-step deployment guide covering prerequisites, configuration, secrets management, verification, troubleshooting, and upgrades, see **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
+
 ## How It Works
 
 ```
