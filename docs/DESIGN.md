@@ -53,7 +53,7 @@ each agent's workspace.
 1. Read openclaw.json → agents.list[]
 2. For each agent:
    a. id = "main" → L0 Orchestrator
-   b. id in ["sysadmin", "full-power"] → L1-C Core
+   b. id in ["sysadmin", "full-power", hrAgentId] → L1-C Core
    c. For all others, find parent by scanning which agent's
       subagents.allowAgents contains this agent's id
    d. If parent = "main" → L1-D Department Director
@@ -92,7 +92,20 @@ Every enforcement operation is idempotent:
 
 ## What We Don't Do
 
-- **Don't modify openclaw.json** — that's the user's domain
+- **Don't touch openclaw.json for non-agent settings** — only the offboard command modifies agents.list
 - **Don't create agent workspaces** — `openclaw agents add` does that
 - **Don't start/stop agents** — that's the gateway's job
 - **Don't touch USER.md, TOOLS.md, IDENTITY.md** — those are agent-specific, not hierarchy
+
+## Agent Governance (HR)
+
+The HR agent (`hr`) is a mandatory L1-C Core agent responsible for agent lifecycle:
+
+- **Onboarding**: Only HR may add new agents. All other agents have a "No Agent Installation"
+  policy injected into their AGENTS.md by the enforcer.
+- **Offboarding**: HR uses `/offboard` to cleanly remove agents (archive workspace, update config,
+  clean references). The offboard operation works on a deep copy to avoid mutating live config,
+  and writes openclaw.json exactly once.
+- **Main awareness**: The enforcer injects an "Agent Governance" section into main's SOUL.md,
+  instructing it to route all agent provisioning requests to HR.
+- **Protected agents**: main, sysadmin, full-power, and hr itself cannot be offboarded.

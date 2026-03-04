@@ -9,6 +9,7 @@
 | 🟢 | (Orchestrator) | L0 | healthy | — | — |
 | 🟢 | (System Admin) | L1-C | idle | — | — |
 | ⚪ | (Full Power) | L1-C | standby | — | — |
+| 🟢 | (HR) | L1-C | idle | — | — |
 
 ## Installed Departments
 (none — install via sysadmin)

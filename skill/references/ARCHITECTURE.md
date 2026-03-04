@@ -17,7 +17,7 @@ A **portable, plug-and-play agent hierarchy** that works on any OpenClaw install
 
 ---
 
-## 3. The Core Hierarchy (3 Mandatory Agents)
+## 3. The Core Hierarchy (4 Mandatory Agents)
 
 ```
 ┌─────────────────────────────────────┐
@@ -30,23 +30,29 @@ A **portable, plug-and-play agent hierarchy** that works on any OpenClaw install
 │  L1-Core: System Admin (sysadmin)   │
 │  "The CTO"                          │
 │  Manages the OpenClaw system itself  │
-│  Agent provisioning, config, infra  │
+│  System config, infra, plugins      │
 │                                     │
 │  L1-Core: Full Power (full-power)   │
 │  "The Emergency Override"           │
 │  Max-capability fallback            │
 │  Only invoked by explicit command   │
 │                                     │
+│  L1-Core: HR (hr)                   │
+│  "The Agent Governance Officer"     │
+│  Sole authority for agent lifecycle │
+│  Onboarding, offboarding, reorgs   │
+│                                     │
 └─────────────────────────────────────┘
 ```
 
-### Why these three?
+### Why these four?
 
 | Agent | Why mandatory |
 |-------|---------------|
 | **Orchestrator** | Every org needs a leader. Entry point for all human interaction. |
-| **System Admin** | Self-maintenance layer. Without it, you can't install new sub-systems. |
+| **System Admin** | Self-maintenance layer. Without it, you can't manage the system. |
 | **Full Power** | Emergency escalation. Raw-power fallback when everything else fails. |
+| **HR** | Agent governance. Without it, any agent could install/remove others — chaos. |
 
 ---
 
@@ -166,7 +172,7 @@ Every permanent/session agent declares itself via `AGENT-MANIFEST.md` in its wor
 ## Architecture
 - Version: 2.2
 - Max Depth: 6 layers (L0-L5)
-- Core Agents: 3 (immutable)
+- Core Agents: 4 (immutable: main, sysadmin, full-power, hr)
 
 ## Agent Tree
 | ID | Name | Type | Layer | Parent | Model Tier | Status |

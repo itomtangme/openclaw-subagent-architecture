@@ -1,8 +1,6 @@
-# Ignore
+# Compiled output
 node_modules/
 dist/
-*.js
-!plugin/src/**
 *.map
 
 # OS
